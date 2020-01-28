@@ -1,0 +1,8 @@
+---
+title: Hello World!
+author: PMAC
+date: '2020-01-28'
+---
+A little intro to what fantasy banter is all about.
+
+# Hello World!

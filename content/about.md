@@ -1,9 +1,13 @@
 ---
 authorbox: false
 date: "2020-01-28"
-menu: main
+menu: 
+  main:
+    name: About 
+    weight: 1         <!-- Menu Order -->
+    
 sidebar: false
-title: ABOUT Hugo
+title: About
 ---
 
 Hugo is a static site engine written in Go.
