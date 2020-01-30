@@ -13,10 +13,10 @@
     
     <item>
       <title>Hello World!</title>
-      <link>/post/2020-01-28-hello-world/</link>
+      <link>/post/2020-01-30-hello-world/</link>
       <pubDate>Thu, 30 Jan 2020 00:00:00 +0000</pubDate>
       
-      <guid>/post/2020-01-28-hello-world/</guid>
+      <guid>/post/2020-01-30-hello-world/</guid>
       <description>Hello World! By way of introduction, my name is Paul ‘PMAC’ McGrath. I am a data analytics enthusiast and AFL supercoach fanatic. My tool of choice is R and I have implemented this site through a series of Rmarkdown files using Blogdown. I don’t fancy myself as much of a wordsmith so the majority of my posts are going to be focused on data elements.
 The purpose of this site is talk all things Supercoach.</description>
     </item>

@@ -1,0 +1,22 @@
+---
+title: Hello World!
+author: PMAC
+date: '2020-01-30'
+menu:
+  main:
+    name: About
+    weight: 1
+---
+
+Hello World! By way of introduction, my name is Paul 'PMAC' McGrath. I am a data analytics enthusiast and AFL supercoach fanatic. My tool of choice is R and I have implemented this site through a series of Rmarkdown files using Blogdown. I don't fancy myself as much of a wordsmith so the majority of my posts are going to be focused on data elements. 
+
+The purpose of this site is talk all things Supercoach. I am the (self appointed) Commissioner of the Addicts Supercoach League (ASL). In 2012, me and a group of mates started a Supercoach Draft league and it has flourished ever since. The holy grail, the 'Dawnbreaker', is our trophy that we all strive so hard to own each and every year. I plan on doing a history article on the ASL at some stage in the future.
+
+For years I've been serving up high quality stats through my fictional publication known as 'Fantasy Banter' but now its time to start to capture some of my work in a more formal setting. I want to use this platform to improve my analytic skills and ultimately bring home the Dawnbreaker.
+
+At some stage I hope to link in my socials, so if you have any ideas or theories or just want to chat, just reach out. Thanks for taking the time to stop past Fantasy Banter and I hope you enjoy.
+
+#### PMAC
+
+
+
