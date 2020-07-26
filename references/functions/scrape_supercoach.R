@@ -39,7 +39,7 @@ download_supercoach <- function(rnd=1, auth_headers){
     config = auth_headers
   ))
   
-  save(players, file=paste0(filepath, '_SC_PLAYERS.RData'))
+  saveRDS(players, file=paste0(filepath, '_SC_PLAYERS.RDS'))
   
 
   teams <- content(GET(
@@ -47,6 +47,73 @@ download_supercoach <- function(rnd=1, auth_headers){
     config = auth_headers
   ))
   
-  save(teams, file=paste0(filepath, '_SC_TEAMS.RData'))
+  saveRDS(teams, file=paste0(filepath, '_SC_TEAMS.RDS'))
 }
+
+#---------------------------------------------------------
+# Function to refresh master data
+refresh_supercoach <- function(){
+  
+  files <- list.files('./references/data/raw/')
+  files <- unique(substr(files, 1,7))
+  
+  master_data <- tibble()
+  
+  for (file in files){
+    
+    filename <- paste0('./references/data/raw/', file, '_SC_TEAMS.RDS')
+    
+    data <- readRDS(filename)
+    
+    league <- lapply(data$ladder, unlist)
+    league <- bind_rows(lapply(league, as.data.frame.list))
+    
+    league <- league[,c(
+      'user_team_id',
+      'userTeam.teamname',
+      'userTeam.user_id',
+      'userTeam.user.first_name'
+    )]
+  
+      
+    team_data <- tibble()
+    for (nTeam in 1:length(data$ladder)){
+      
+      players <- append(
+        data$ladder[[nTeam]]$userTeam$scores$scoring,
+        data$ladder[[nTeam]]$userTeam$scores$nonscoring
+      )
+      
+      players <- lapply(players, unlist)
+      players <- bind_rows(lapply(players, as.data.frame.list))
+      
+      team_data <- bind_rows(team_data, players)
+      
+    }
+    
+    team_data <- team_data[,c(
+      'player.feed_id',
+      'player_id', 
+      'round',
+      'picked',
+      'position',
+      'points',
+      'ppts',
+      'player.first_name',
+      'player.last_name',
+      'player.team.abbrev',
+      'user_team_id'
+    )]
+    
+    team_data2 <- left_join(team_data, league, by=c('user_team_id'))
+    
+    master_data <- bind_rows(master_data, team_data2)  
+    
+  }
+  
+  write_csv(master_data, paste0('./references/data/clean/2020_Master_Data.csv'))
+  
+}
+
+
 
