@@ -10,7 +10,7 @@ source('./references/functions/scrape_supercoach.R')
 auth_headers <- get_auth(cid, tkn)
 
 # Download Data
-for(i in 1:6){
+for(i in 6:8){
   download_supercoach(i, auth_headers)
 }
 
