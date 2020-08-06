@@ -19,8 +19,7 @@ source('./references/functions/scrape_supercoach.R')
 #   
 # saveRDS(draft_data, '../../references/data/raw/2020_00_SC_DRAFT.RDS')
 
-rnd <- 8
-rnd_str <- sprintf("%02d", rnd)
+
 
 draft_raw<- readRDS( './references/data/raw/2020_00_SC_DRAFT.RDS')
 draft_raw <- lapply(draft_raw, unlist)
@@ -35,6 +34,9 @@ draft_data <- as_tibble(draft_raw[,c(
   mutate(round = as.numeric(round))
 
 
+rnd <- 8
+rnd_str <- sprintf("%02d", rnd)
+
 players_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_PLAYERS.RDS'))
 players_raw <- lapply(players_raw, unlist)
 players_raw <- bind_rows(lapply(players_raw, as.data.frame.list))
@@ -43,11 +45,35 @@ player_data <- as_tibble(players_raw[,c(
   'first_name',
   'last_name',
   'team.abbrev',
-  'player_stats.avg',
   'positions.position',
-  'positions.position.1'
+  'positions.position.1',
+  'player_stats.avg'
 )]) %>%
   mutate(player_stats.avg = as.numeric(player_stats.avg))
+
+# Get median
+median_data <- tibble()
+for(i in 1:rnd){
+  rnd_str <- sprintf("%02d", i)
+  players_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_PLAYERS.RDS'))
+  players_raw <- lapply(players_raw, unlist)
+  players_raw <- bind_rows(lapply(players_raw, as.data.frame.list))
+  median_raw <- as_tibble(players_raw[,c(
+    'id',
+    'player_match_stats.points'
+  )]) %>%
+    mutate(player_match_stats.points = as.numeric(player_match_stats.points))
+  
+  median_data <- bind_rows(median_data, median_raw)
+}
+
+median_data <- median_data %>%
+  group_by(id) %>%
+  summarise(median_score = median(player_match_stats.points, na.rm=T)) %>%
+  arrange(desc(median_score))
+
+median_data$median_score[is.na(median_data$median_score)] <- 0
+
 
 team_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_TEAMS.RDS'))
 team_data <- tibble()
@@ -70,8 +96,10 @@ team_data <- team_data[,c(
 )] %>%
   rename(current_team_id = user_team_id)
 
-heat_map <- left_join(player_data, draft_data, by=c('id'='player_id'))
+heat_map <- left_join(player_data, median_data, by=c('id'))
+heat_map <- left_join(heat_map, draft_data, by=c('id'='player_id'))
 heat_map <- left_join(heat_map, team_data, by=c('id'='player_id'))
+
 
 
 #DeGoey no in the draft data
@@ -94,20 +122,19 @@ heat_map$positions.position.1[is.na(heat_map$positions.position.1)] <- ''
 positions <- c('DEF','MID','RUC','FWD')
 pos_count <- c(48, 64, 12, 48)
 
-
 for (i in 1:4){
-
+  
   pos <- positions[i]
   
   pos_data <- heat_map %>%
     filter(positions.position == pos | positions.position.1 == pos) %>%
-    arrange(desc(player_stats.avg))
+    arrange(desc(median_score))
     
-  mean <- mean(pos_data$player_stats.avg[1:pos_count[i]])
-  stdev <- sd(pos_data$player_stats.avg[1:pos_count[i]])
+  mean <- mean(pos_data$median_score[1:pos_count[i]])
+  stdev <- sd(pos_data$median_score[1:pos_count[i]])
   
   pos_data <- pos_data %>%
-    mutate(norm_score = (player_stats.avg-mean)/(stdev))
+    mutate(norm_score = (median_score-mean)/(stdev))
   
   pos_data <- pos_data[,c('id','norm_score')]
   colnames(pos_data)[2] <- pos
