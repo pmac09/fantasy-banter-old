@@ -1,113 +1,42 @@
-options(stringsAsFactors = FALSE)
+# Load supercoach functions
+source('./references/functions/load.R')
 
-library(httr)
-library(tidyverse)
-
-source('./references/functions/secrets.R')
-source('./references/functions/scrape_supercoach.R')
-
-# Get authentication 
-auth_headers <- get_auth(cid, tkn)
-
-# Get game settings
-settings <- content(GET(
-  url = paste0('https://supercoach.heraldsun.com.au/2020/api/afl/draft/v1/settings'),
-  config = auth_headers
-))
+# Refresh supercoach data
+refresh_sc_data(cid, tkn)
 
 # Get current round
-round <- settings$competition$current_round
-
-# Update Supercoach data
-for(i in 1:round){
-  download_supercoach(i, auth_headers)
-}
-
+auth_headers <- get_sc_auth(cid, tkn)
+settings <- get_sc_settings(auth_headers)
+rnd <- settings$competition$current_round
 
 master_data <- tibble()
-for(rnd in 1:round){
+for(i in 1:rnd){
   
-  rnd_str <- sprintf("%02d", rnd)
-  
-  # PLAYER DATA  ------
-  players_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_PLAYERS.RDS'))
-  players_raw <- lapply(players_raw, unlist)
-  players_raw <- bind_rows(lapply(players_raw, as.data.frame.list))
-  players_data <-players_raw[,c(
-    'feed_id',
-    'id',
-    'first_name',
-    'last_name',
-    'team.abbrev',
-    'positions.position',
-    'positions.position.1',
-    'player_stats.ppts',
-    'player_match_stats.points'
-  )]
-  colnames(players_data) <- c(
-    'feed_id',
-    'player_id',
-    'first_name',
-    'last_name',
-    'team_abbrev',
-    'pos',
-    'pos2',
-    'projected_points',
-    'points'
-  )
-  
-  # PLAYER TO TEAM LINK  ------
-  league_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_TEAMS.RDS'))
-  
-  league_data <- tibble()
-  for(tm in 1:length(league_raw$ladder)){
-    
-    team_raw <- append(
-      league_raw$ladder[[tm]]$userTeam$scores$scoring,
-      league_raw$ladder[[tm]]$userTeam$scores$nonscoring
-    )
-    
-    team_raw <- lapply(team_raw, unlist)
-    team_raw <- bind_rows(lapply(team_raw, as.data.frame.list))
-    team_data <-team_raw[,c(
-      'player_id',
-      'user_team_id',
-      'picked',
-      'position'
-    )]
-    
-    league_data <- bind_rows(league_data, team_data)
+  message('Round ', i, '...')
+  rnd_str <- sprintf("%02d", i)
 
-  }
+  # Player stats
+  player_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_PLAYER_DATA.RDS'))
+  player_data <- get_sc_player_data(player_raw)
+
+  # SC Lineups
+  league_raw <- readRDS(paste0('./references/data/raw/2020_',rnd_str,'_SC_LEAGUE_DATA.RDS'))
+  team_data <- get_sc_team_data(league_raw) 
   
-  ## TEAM DATA  ------
-  
-  ladder_raw <- lapply(league_raw$ladder, unlist)
-  ladder_raw <- bind_rows(lapply(ladder_raw, as.data.frame.list))
-  ladder_data <-ladder_raw[,c(
-    'user_team_id',
-    'userTeam.teamname',
-    'userTeam.user.first_name'
-  )]
-  colnames(ladder_data) <- c(
-    'user_team_id',
-    'sc_team',
-    'sc_coach'
-  )
-  
-  ## COMBINE DATA ------
-  round_data <- left_join(players_data, league_data, by=c('player_id'))
-  round_data <- left_join(round_data, ladder_data, by=c('user_team_id'))
-  
-  round_data <- round_data %>%
+  # Combine
+  round_data <- left_join(player_data, team_data, by=c('player_id')) %>%
     add_column(round = rnd) %>%
     add_column(year = 2020) %>%
     mutate(projected_points = as.numeric(projected_points)) %>%
     mutate(points = as.numeric(points))
-    
   
+  # Merge back to master
   master_data <- bind_rows(master_data, round_data)
-  
 }
 
-write_csv(master_data, './references/data/clean/Master_Player_Data_2020.csv', na='')
+#Add team names
+ladder_data <- get_sc_ladder_data(league_raw)[,c(1:3)]
+master_data <- left_join(master_data, ladder_data, by=c('user_team_id'))
+
+# Save .csv
+write_csv(master_data, './references/data/clean/2020_Player_Data.csv', na='')
