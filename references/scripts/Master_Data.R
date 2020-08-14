@@ -26,9 +26,7 @@ for(i in 1:rnd){
   # Combine
   round_data <- left_join(player_data, team_data, by=c('player_id')) %>%
     add_column(round = i) %>%
-    add_column(year = 2020) %>%
-    mutate(projected_points = as.numeric(projected_points)) %>%
-    mutate(points = as.numeric(points))
+    add_column(year = 2020)
   
   # Merge back to master
   master_data <- bind_rows(master_data, round_data)

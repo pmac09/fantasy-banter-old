@@ -26,6 +26,10 @@ get_sc_player_data <- function(player_raw){
     'points'
   )
   
+  player_data <- player_data %>%
+    mutate(projected_points = as.numeric(projected_points)) %>%
+    mutate(points = as.numeric(points))
+  
   return(player_data)
   
 }
