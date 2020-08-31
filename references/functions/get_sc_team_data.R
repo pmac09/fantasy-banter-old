@@ -23,6 +23,13 @@ get_sc_team_data <- function(league_raw){
     'position'
   )]
   
-  return(team_data)
+  data <- tibble(
+    player_id = as.numeric(team_data$player_id),
+    user_team_id   = as.numeric(team_data$user_team_id),
+    picked    = as.logical(team_data$picked),
+    position  = team_data$position
+  )
+  
+  return(data)
 
 }

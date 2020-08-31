@@ -1,35 +1,82 @@
 # Load supercoach functions
 source('./references/functions/load.R')
 
-master_data <- read_csv('./references/data/clean/2020_Player_Data.csv') %>%
-  mutate(round = as.character(round)) %>%
-  mutate(user_team_id = as.character(user_team_id))
-
-team_scores <- master_data %>%
+master_data <- read_csv('./references/data/clean/2020_Player_Data.csv') 
+  
+team_data <- master_data %>%
   filter(picked == TRUE) %>%
   group_by(round, user_team_id) %>%
-  summarise(points = sum(points, na.rm=T)) 
+  summarise(
+    points = sum(points, na.rm=T),
+    .groups = 'drop'
+    ) 
 
+player_data <- master_data %>%
+  group_by(player_id, last_name, team_abbrev) %>%
+  filter(points > 0) %>%
+  summarise(
+    mean = mean(points, na.rm=T),
+    sd = sd(points, na.rm=T),
+    min = min(points, na.rm=T),
+    .groups = 'drop'
+  )
+
+missing_data <- master_data %>%
+  rowwise() %>%
+  mutate(points = max(points, projected_points, na.rm=T)) %>%
+  ungroup() %>%
+  group_by(player_id, last_name, team_abbrev) %>%
+  filter(points > 0) %>%
+  summarise(
+    mean = mean(projected_points, na.rm=T),
+    sd = sd(projected_points, na.rm=T),
+    min = min(points, na.rm=T),
+    .groups = 'drop'
+  )
+
+
+
+## Get Current Teams
 auth_headers <- get_sc_auth(cid, tkn)
+settings <- get_sc_settings(auth_headers)
+rnd <- settings$competition$next_round
+live_raw <- get_sc_league_raw(auth_headers, rnd)
+live_data <- get_sc_team_data(live_raw) 
 
-fixture <- tibble() 
-for(i in 1:16){
-  
-  league_raw <- get_sc_league_raw(auth_headers, i)
-  fixture_data <- get_sc_fixture_data(league_raw)
-  
-  fixture <- bind_rows(fixture, fixture_data)
-}
+live_teams <- left_join(live_data, player_data, by=c('player_id')) %>%
+  filter(picked == TRUE)
 
-away <- fixture[,c(1,2,6,7,8,3,4,5,9)]
-colnames(away) <- colnames(fixture)
+miss <- live_teams$player_id[is.na(live_teams$sd)]
+miss <- inner_join(live_data, missing_data[which(missing_data$player_id == miss),], by=c('player_id')) %>%
+  filter(picked == TRUE)
 
-fixture <- bind_rows(fixture, away) 
+live_teams <- live_teams[!is.na(live_teams$sd),]
+live_teams <- bind_rows(live_teams, miss)
 
-fixture <- left_join(fixture, team_scores, by=c('round','user_team1.id'='user_team_id')) %>%
+byes <- list(
+  'R14' = c('ADE','BRL'),
+  'R15' = c('GCS','NTH','PTA','WBD','GEE','STK'),
+  'R16' = c('COL','RIC')
+)
+
+
+## GET FIXTURE ------------------
+
+# fixture <- tibble() 
+# for(i in 1:16){
+#   
+#   league_raw <- get_sc_league_raw(auth_headers, i)
+#   fixture_data <- get_sc_fixture_data(league_raw)
+#   
+#   fixture <- bind_rows(fixture, fixture_data)
+# }
+
+fixture <- read_csv('./references/data/clean/2020_Fixture_Data.csv')
+
+fixture <- left_join(fixture, team_data, by=c('round','team_id'='user_team_id')) %>%
   rename(home_points = points)
 
-fixture <- left_join(fixture, team_scores, by=c('round','user_team2.id'='user_team_id')) %>%
+fixture <- left_join(fixture, team_data, by=c('round','opponent_team_id'='user_team_id')) %>%
   rename(away_points = points)
 
 fixture <- fixture %>%
@@ -38,38 +85,66 @@ fixture <- fixture %>%
   arrange(round, fixture)
 
 
-list.coach <- unique(fixture$user_team1.teamname)
+## START SIM ------------------
 
+list.coach <- unique(fixture$coach)
 
 noOfSims <- 10000
 
 results <- tibble()
 for( sim in 1:noOfSims){
   
-  data <- fixture
+  data <- fixture[1:9]
   
-  for (i in 1:length(list.coach)){
+  ## Simulate team
+  sim_teams <- team_data
+  for(i in rnd:16){
     
-    scores <- data$home_points[data$user_team1.teamname == list.coach[i]]
-    scores <- scores[!is.na(scores)]
+    proj <- live_teams %>%
+      rowwise() %>%
+      mutate(points = round(rnorm(1, mean, sd),0)) %>%
+      mutate(points = ifelse(points<0, min, points))
     
-    for (j in (length(scores)+1):16){
-      mean <- mean(scores)
-      sd <- sd(scores)
-      scores[j] <- round(rnorm(1, mean, sd),0)
+    bye <- paste0('R',i)
+    
+    if(bye %in% names(byes)){
+      proj$points[proj$team_abbrev %in% byes[[bye]]] <- 0
     }
     
-    data$home_points[data$user_team1.teamname == list.coach[i]] <- scores
-    data$away_points[data$user_team2.teamname == list.coach[i]] <- scores
+    proj_teams <- proj %>%
+      group_by(user_team_id) %>%
+      summarise(
+        points = sum(points),
+        .groups = 'drop'
+      ) %>%
+      mutate(round = i)
+    
+    sim_teams <- bind_rows(sim_teams, proj_teams)
+    
   }
   
+  names(sim_teams)[3] <- 'home_points'
+  data <- left_join(data, sim_teams, by=c('round', 'team_id'='user_team_id'))
   
+  names(sim_teams)[3] <- 'away_points'
+  data <- left_join(data, sim_teams, by=c('round', 'opponent_team_id'='user_team_id'))
+  
+
   tmp <- data %>%
     mutate(DIFFERENTIAL = home_points - away_points) %>%
     mutate(WIN = ifelse(DIFFERENTIAL>0, 1, 0)) %>%
     mutate(DRAW = ifelse(DIFFERENTIAL==0, 1, 0)) %>%
-    mutate(LOSS = ifelse(DIFFERENTIAL<0, 1, 0)) %>%
-    group_by(user_team1.teamname) %>%
+    mutate(LOSS = ifelse(DIFFERENTIAL<0, 1, 0)) 
+  
+  # t <- data %>%
+  #   filter(round == 15) %>%
+  #   filter(team %in% c('Coronaviney', "HoweIMetYourMother")) %>%
+  #   filter(home_points > away_points)
+  # 
+  # if(nrow(t) < 2) next
+  
+  tmp <- tmp %>%
+    group_by(team) %>%
     summarise(
       W = sum(WIN),
       D = sum(DRAW),
@@ -93,15 +168,19 @@ for( sim in 1:noOfSims){
   }
 }
 
+
+
+
+
 summary <- results %>%
   mutate(TOP4 = ifelse(rank <= 4, 1,0)) %>%
-  group_by(user_team1.teamname) %>%
+  group_by(team) %>%
   summarise(
     RANK.MEAN = mean(rank),
     WIN.MAX = max(W),
     WIN.MIN = min(W),
     FINALS = sum(TOP4),
-    sim = max(simulation)
+    sim = n_distinct(simulation)
   ) %>%
   arrange(RANK.MEAN) %>%
   mutate(PCNT = round(FINALS/sim*100))
@@ -116,7 +195,7 @@ bkp <- results
 
 
 smy <- results %>%
-  group_by(COACH) %>%
+  group_by(team) %>%
   summarise(
     p1 = sum(ifelse(rank == 1, 1,0)),
     p2 = sum(ifelse(rank == 2, 1,0)),
@@ -143,8 +222,12 @@ pos_smy <- results %>%
   arrange(rank)
 
 pos_smy
+
 results %>%
-  filter(user_team1.teamname=='Bad Boys For Fyfe' & W == 3)
+  filter(team == 'Coronaviney' & rank == 6)
+
+results %>%
+  filter(simulation == 2689)
 
 
 %>%
@@ -157,11 +240,11 @@ results %>%
 
 
 results %>%
-  filter(COACH == 'RICHO' & rank == 4)
+  filter(team == "What's Up, Doch?" & rank == 5)
 
 
 results %>%
-  filter(simulation == 7087)
+  filter(simulation == 8740)
 
   # smy <- results %>%
 #   group_by(COACH) %>%
