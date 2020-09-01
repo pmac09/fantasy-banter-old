@@ -2,7 +2,7 @@
 source('./references/functions/load.R')
 
 # Refresh supercoach data
-refresh_sc_data(cid, tkn)
+refresh_sc_data(cid, tkn, 13)
 
 # Get current round
 auth_headers <- get_sc_auth(cid, tkn)
