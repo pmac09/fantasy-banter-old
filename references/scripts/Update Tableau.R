@@ -36,12 +36,8 @@ if(is.na(round_data$projected_points[1])) {
   round_data <- left_join(round_data, rd_proj, by=c('player_id')) %>%
     mutate(projected_points = ifelse(is.na(projected_points), proj, projected_points))
   
-  byes <- c('GCS','NTH','PTA','WBD','GEE','STK')
-  #'R16' = c('COL','RIC')
   
-  round_data <- round_data[,!(names(round_data) %in% c('proj'))] %>%
-    mutate(projected_points = ifelse(team_abbrev %in% byes, 0 , projected_points))
-  
+  round_data <- round_data[,!(names(round_data) %in% c('proj'))] 
 }
 
 round_data <- round_data  %>%

@@ -1,27 +1,33 @@
 options(stringsAsFactors = FALSE)
 
 library(shiny)
-library(tidyverse)
-library(httr)
-library(data.table)
+library(miniUI)
+library(DT)
+library(Jmisc)
 
+sourceAll('./functions/')
 
-# Define UI for application that draws a histogram
-ui <- fluidPage(
+ui <- miniPage(
   
-  # Application title
-  titlePanel("ASL Live Matchups"),
-  
-  # Sidebar with a slider input for number of bins 
-  sidebarLayout(
-    sidebarPanel(
-      uiOutput('uiSelectMatchup')
-    ),
+  ## TITLE ----
+  gadgetTitleBar(
+    "ASL GRAND FINAL 2020"
+  ),
+  miniTabstripPanel(
     
-    
-    # Show a plot of the generated distribution
-    mainPanel(
-      tableOutput("text")
+    ## SCORING TAB ----
+    miniTabPanel(
+      "Live Scores", 
+      icon = icon("clipboard"),
+      miniContentPanel(
+        fillCol( flex= c(NA,NA,NA,1),
+          textOutput("gameTime"),
+          textOutput("pointsAllocated"),
+          textOutput("margin"),
+          dataTableOutput("liveData")
+
+        )
+      )
     )
   )
 )
@@ -29,109 +35,129 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
   
-  ## FUNCTIONS ------------------------------------
-  source('./functions/secrets.R')
-  source('./functions/get_auth.R')
-  
-  source('./functions/sc_get_league_data.R')
-  source('./functions/sc_get_fixture_data.R')
-  source('./functions/sc_get_team_data.R')  
-  
-  source('./functions/ff_get_fixture.R')  
-  source('./functions/ff_get_game_data.R')
   
   
-  ## SETUP ------------------------------------
   
-  # Get authentication 
-  auth_headers <- get_auth(cid, tkn)
+  auth_headers <- get_sc_auth(cid, tkn)
+  settings <- get_sc_settings(auth_headers)
   
-  # Get game settings
-  settings <- content(GET(
-    url = paste0('https://supercoach.heraldsun.com.au/2020/api/afl/draft/v1/settings'),
-    config = auth_headers
-  ))
-  
-  # Get current round
   rnd <- settings$competition$next_round
   
+  league_raw <- get_sc_league_raw(auth_headers, rnd)
+  player_data <- get_sc_player_data(get_sc_player_raw(auth_headers, rnd))
+  team_data <- get_sc_team_data(league_raw)
+  
+  tData <- left_join(team_data, player_data, by = c('player_id' = 'player_id')) %>%
+    mutate(points = as.numeric(points)) %>%
+    filter(picked == TRUE)
   
   
-  ## REACTIVE FUNCTIONS ------------------------------------
-  league_data <- reactive({
-    sc_get_league_data(auth_headers, rnd)
-  }) # League data for current round
-  team_data <- reactive({
-    sc_get_team_data(league_data())
-  }) # Teams for the selected round
-  fixture_data <- reactive({
-    sc_get_fixture_data(league_data())
-  }) # Fixture for the selected round
-  selected_fixture <- reactive({
-    req(input$lstSelectMatchup)
-    selection <- fixture_data() %>%
-      filter(matchup == input$lstSelectMatchup)
+  ff_data_r <- reactive({
+    invalidateLater(30 * 1000)
+    ff_data <- ff_get_game_data(7454)
+    return(ff_data)
+  })
+  
+  game_time_r <- reactive({
+    ff_data <- ff_data_r()
+    game_time <- ff_data$gametime[1]
+    return(game_time)
+  })
+  
+  points_allocated_r <- reactive({
+    ff_data <- ff_data_r()
+    points_allocated <- sum(as.numeric(ff_data$supercoach)) 
+    return(points_allocated)
+  })
+  
+  margin_r <- reactive({
+    live_team <- live_team_r()
+    margin <- live_team$score[nrow(live_team)] - 1700
+    return(margin)
+  })
+
+  live_team_r <- reactive({ 
     
-    return(selection)
+    ff_live_data <- ff_data_r()
     
-  }) # Selected game from fixture
-  
-  ff_fixture <- reactive({
-    ff_get_fixture(live = TRUE)
-  }) # Today's games via fanfooty
-  
-  ff_live_data <- function(ff_fixture){
-    live_data <- tibble()
-    for(i in ff_fixture$game_id){
-      game_data <- ff_get_game_data(i)
-      live_data <- bind_rows(live_data, game_data)
-    }
-    return(live_data)
-  }
-  ff_live_data_r <- reactive({
-    ff_live_data(ff_fixture())
-  }) # Live scores
-  
-  projection_data <- function(team_data, ff_live_data){
-    
-    tData <- team_data[,c(
-      'user_team_id',
-      'player.feed_id',
-      'player.first_name',
-      'player.last_name',
-      'player.played_status.status',
-      'points'
-    )]
+    tData <- left_join(team_data, player_data, by = c('player_id' = 'player_id')) %>%
+      mutate(points = as.numeric(points)) %>%
+      filter(picked == TRUE)
     
     lData <- ff_live_data[,c(
       'player.feed_id',
       'supercoach'
-    )]
+    )] %>%
+      mutate(supercoach = as.numeric(supercoach)) %>%
+      mutate(player.feed_id = as.numeric(player.feed_id)) %>%
+      mutate(supercoach = ifelse(is.na(supercoach), 0, supercoach))
     
-    projection_data <- left_join(tData, lData, by=c('player.feed_id'))
-  }
-  projection_data_r <- reactive({
-    projection_data(team_data(), ff_live_data_r())
+    projection_data <- left_join(tData, lData, by=c('feed_id' = 'player.feed_id')) %>%
+      rowwise() %>%
+      mutate(live = sum(points, supercoach, na.rm=T)) %>%
+      ungroup()
+    
+    summary <- projection_data %>%
+      mutate(player = ifelse(!is.na(supercoach), last_name, user_team_id)) %>%
+      group_by(user_team_id, player) %>%
+      summarise(
+        score = sum(live),
+        .groups = 'drop'
+      ) %>%
+      arrange(desc(score))
+    
+    
+    totals <- summary %>%
+      group_by(user_team_id) %>%
+      summarise(
+        score = sum(score),
+        .groups = 'drop'
+      )
+    
+    live_team <- bind_rows(
+      summary %>% filter(user_team_id == 186),
+      totals %>% filter(user_team_id == 186)
+    )
+    
+    return(live_team)
+    
   })
   
+  
+  output$liveData <- renderDataTable({
 
-
-  
-  ## UI OUTPUT ------------------------------------
-  output$uiSelectMatchup <- renderUI({
+    data <- live_team_r()[,c(2:3)]
     
-    fixture <- fixture_data()
+    table <- datatable(data,
+                       rownames= FALSE,
+                       options= list(paging= FALSE, 
+                                     searching= FALSE, 
+                                     ordering=FALSE, 
+                                     info=FALSE,
+                                     columnDefs = list(
+                                       list(
+                                         className = 'dt-center', 
+                                         targets = 1:(ncol(data)-1)))
+                       ),
+                       extensions="Responsive"
+    ) %>%
+      formatStyle( 0, target= 'row', lineHeight='70%')
     
-    ui <-  selectInput('lstSelectMatchup', 
-                       h3("Match-up:"), 
-                       choices = fixture$matchup, 
-                       selected = 1)
-    return(ui)
+    return(table)
   })
   
-  output$text <- renderTable({
-    head(projection_data_r())
+  output$gameTime <- renderText({
+    paste0("Game Time: ", game_time_r())
   })
+  
+  output$pointsAllocated <- renderText({
+    paste0("Points Allocated: ", points_allocated_r())
+  })
+  
+  output$margin <- renderText({
+    paste0("Margin: ", margin_r())
+  })
+  
   
   
 }

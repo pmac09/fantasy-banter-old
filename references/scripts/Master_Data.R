@@ -2,7 +2,7 @@
 source('./references/functions/load.R')
 
 # Refresh supercoach data
-refresh_sc_data(cid, tkn, 13)
+refresh_sc_data(cid, tkn)
 
 # Get current round
 auth_headers <- get_sc_auth(cid, tkn)
@@ -35,6 +35,9 @@ for(i in 1:rnd){
 #Add team names
 ladder_data <- get_sc_ladder_data(league_raw)[,c(1:3)]
 master_data <- left_join(master_data, ladder_data, by=c('user_team_id'))
+
+master_data$points[master_data$points == 0] <- NA
+  
 
 # Save .csv
 write_csv(master_data, './references/data/clean/2020_Player_Data.csv', na='')

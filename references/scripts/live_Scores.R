@@ -14,8 +14,12 @@ fixture_data <- get_sc_fixture_data(league_raw)
 # Today's games via fanfooty
 ff_fixture <- ff_get_fixture_data(live = TRUE) 
 
+#run <- T
+#while(run){
+
+
 # Current Game
-ff_live_data <- ff_get_game_data(ff_fixture$game_id[2])
+ff_live_data <- ff_get_game_data(ff_fixture$game_id[1])
 
 tData <- left_join(team_data, player_data, by = c('player_id' = 'player_id')) %>%
   mutate(points = as.numeric(points)) %>%
@@ -26,7 +30,8 @@ lData <- ff_live_data[,c(
   'supercoach'
 )] %>%
   mutate(supercoach = as.numeric(supercoach)) %>%
-  mutate(player.feed_id = as.numeric(player.feed_id))
+  mutate(player.feed_id = as.numeric(player.feed_id)) %>%
+  mutate(supercoach = ifelse(is.na(supercoach), 0, supercoach))
 
 projection_data <- left_join(tData, lData, by=c('feed_id' = 'player.feed_id')) %>%
   rowwise() %>%
@@ -34,23 +39,25 @@ projection_data <- left_join(tData, lData, by=c('feed_id' = 'player.feed_id')) %
   ungroup()
 
 
-teams1 <- fixture_data[1,c(
-  'team_id',
-  'team'
-)]
-teams2 <- fixture_data[1,c(
-  'opponent_team_id',
-  'opponent_team'
-)]
+# fixture()
+# 
+# teams1 <- fixture_data[1,c(
+#   'team_id',
+#   'team'
+# )]
+# teams2 <- fixture_data[1,c(
+#   'opponent_team_id',
+#   'opponent_team'
+# )]
+# 
+# names(teams2) <- names(teams1)
+# teams <- bind_rows(teams1,teams2)
 
-names(teams2) <- names(teams1)
-teams <- bind_rows(teams1,teams2)
-
-projection_data <- left_join(projection_data, teams, by=c('user_team_id'='team_id'))
+#projection_data <- left_join(projection_data, teams, by=c('user_team_id'='team_id'))
 
 
 summary <- projection_data %>%
-  mutate(player = ifelse(!is.na(supercoach), last_name, team)) %>%
+  mutate(player = ifelse(!is.na(supercoach), last_name, user_team_id)) %>%
   group_by(user_team_id, player) %>%
   summarise(
     score = sum(live)
@@ -64,27 +71,23 @@ totals <- summary %>%
     score = sum(score)
   )
 
-bind_rows(
-  summary %>% filter(user_team_id == 182),
-  totals %>% filter(user_team_id == 182)
-)
+message(Sys.time())
 
-bind_rows(
-  summary %>% filter(user_team_id == 5524),
-  totals %>% filter(user_team_id == 5524)
-)
+print(bind_rows(
+  summary %>% filter(user_team_id == 186),
+  totals %>% filter(user_team_id == 186)
+))
 
-
-bind_rows(
-  summary %>% filter(user_team_id == 9806),
-  totals %>% filter(user_team_id == 9806)
-)
-
-bind_rows(
-  summary %>% filter(user_team_id == 9867),
-  totals %>% filter(user_team_id == 9867)
-)
+print(bind_rows(
+  summary %>% filter(user_team_id == 9856),
+  totals %>% filter(user_team_id == 9856)
+))
 
 
-sum(lData$supercoach)
 
+message('Margin: ', totals$score[totals$user_team_id == 9856] - totals$score[totals$user_team_id == 186])
+message('Points Allocated: ',sum(lData$supercoach))
+
+#Sys.sleep(30)
+
+#}

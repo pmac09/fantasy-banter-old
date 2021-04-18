@@ -1,0 +1,52 @@
+---
+title: Round 10 Summary
+author: ''
+date: '2020-08-08'
+slug: round-10-summary
+categories: []
+tags: []
+description: ''
+thumbnail: ''
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(highcharter)
+library(reactable)
+
+path <- '../.' #Used so I can run code from the markdown
+source(paste0(path,'./references/functions/load.R'))
+```
+
+
+```{r}
+
+player_data <- read_csv(paste0(path,'./references/data/clean/2020_Player_Data.csv'))
+
+summary <- player_data %>%
+  filter(picked == 'TRUE') %>%
+  group_by(round, teamname) %>%
+  summarise(
+    points = sum(points, na.rm=T)
+  )
+    
+
+hchart(summary, "boxplot", hcaes(x='teamname', ))
+
+```
+
+
+
+
+
+```{r, boxplots}
+
+
+
+
+```
+

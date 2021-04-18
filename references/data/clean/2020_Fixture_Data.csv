@@ -127,3 +127,9 @@ year,round,fixture,team_id,team,coach,opponent_team_id,opponent_team,opponent_co
 2020,16,3,5524,The Dragon's Laird,Luke,9867,Bad Boys For Fyfe,James
 2020,16,4,33301,"What's Up, Doch?",Jordan,9856,It's always Sonny,Simon
 2020,16,4,9856,It's always Sonny,Simon,33301,"What's Up, Doch?",Jordan
+2020,17,1,9806,HoweIMetYourMother,Lester,9856,It's always Sonny,Simon
+2020,17,1,9856,It's always Sonny,Simon,9806,HoweIMetYourMother,Lester
+2020,17,2,186,GetRichOrDieTryin,Mark,33301,"What's Up, Doch?",Jordan
+2020,17,2,33301,"What's Up, Doch?",Jordan,186,GetRichOrDieTryin,Mark
+2020,18,1,186,GetRichOrDieTryin,Mark,9856,It's always Sonny,Simon
+2020,18,1,9856,It's always Sonny,Simon,186,GetRichOrDieTryin,Mark
